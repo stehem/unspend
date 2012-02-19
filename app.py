@@ -1,39 +1,48 @@
-from datetime import datetime
+from flask import Flask, render_template, request, redirect, url_for
+from mongokit import Connection, Document
+import datetime
 
-from flask import Flask, request, render_template, redirect, url_for
-from flaskext.mongokit import MongoKit, Document
+
+# configuration
+MONGODB_HOST = 'localhost'
+MONGODB_PORT = 27017
+
 
 app = Flask(__name__)
-app.debug = True
+app.config.from_object(__name__)
 
-class Task(Document):
-	__collection__ = 'tasks'
+# connect to the database
+connection = Connection(app.config['MONGODB_HOST'],
+								        app.config['MONGODB_PORT'])
+
+
+@connection.register
+class Spend(Document):
+	__collection__ = 'expenses'
+	__database__ = 'dev'
 	structure = {
-		'title': unicode,
-		'text': unicode,
-		'creation': datetime,
+		'amount': int,
+		'date': datetime.datetime
 	}
-	required_fields = ['title', 'creation']
-	default_values = {'creation': datetime.utcnow}
 	use_dot_notation = True
 
-db = MongoKit(app)
-db.register([Task])
-
-@app.route('/')
-def hello_world():
-	return 'Hello World!'
 
 
-@app.route('/new', methods=["GET", "POST"])
-def new_task():
-	if request.method == 'POST':
-		task = db.Task()
-		task.title = request.form['title']
-		task.text = request.form['text']
-		task.save()
-		return redirect(url_for('show_all'))
+@app.route('/expenses/new')
+def new():
 	return render_template('new.html')
-	
+
+@app.route('/expenses', methods=['POST'])
+def create():
+	expense =  connection.Spend({'amount': int(request.form['amount']), 'date': datetime.datetime.today()})
+	expense.save()
+	return redirect(url_for('index'))
+
+@app.route('/expenses', methods=['GET'])
+def index():
+	expenses = connection.Spend.find()
+	return render_template('index.html', expenses=expenses)
+
+
 if __name__ == '__main__':
-	app.run()
+	app.run(debug=True)
